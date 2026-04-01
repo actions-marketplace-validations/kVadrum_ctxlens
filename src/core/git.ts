@@ -52,21 +52,17 @@ export function getStagedFiles(rootPath: string): string[] {
   }
 }
 
-/** Lists all tracked files at a given git ref. */
+/** Lists all tracked files at a given git ref. Throws on invalid ref. */
 export function getFilesAtRef(rootPath: string, ref: string): string[] {
-  try {
-    const output = execFileSync("git", ["ls-tree", "-r", "--name-only", ref], {
-      cwd: rootPath,
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-    return output.trim().split("\n").filter(Boolean);
-  } catch {
-    return [];
-  }
+  const output = execFileSync("git", ["ls-tree", "-r", "--name-only", ref], {
+    cwd: rootPath,
+    encoding: "utf-8",
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  return output.trim().split("\n").filter(Boolean);
 }
 
-/** Returns the content of a file at a given git ref. */
+/** Returns the content of a file at a given git ref, or null if unreadable. */
 export function getFileContentAtRef(rootPath: string, ref: string, filePath: string): string | null {
   try {
     return execFileSync("git", ["show", `${ref}:${filePath}`], {

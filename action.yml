@@ -27,4 +27,4 @@ runs:
         node-version: '18'
     - name: Run ctxlens
       shell: bash
-      run: npx ctxlens@latest scan ${{ inputs.path }} --model ${{ inputs.model }} --ci ${{ inputs.threshold }}
+      run: npx ctxlens@latest scan "${{ inputs.path }}" --model "${{ inputs.model }}" --ci "${{ inputs.threshold }}"

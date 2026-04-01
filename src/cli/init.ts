@@ -58,17 +58,35 @@ export const initCommand = new Command("init")
       rl.close();
     }
 
+    const depthNum = parseInt(depth, 10);
+    const topNum = parseInt(top, 10);
+
+    if (isNaN(depthNum) || depthNum < 1) {
+      console.error(chalk.red(`  Invalid depth: "${depth}". Must be a positive integer.`));
+      process.exit(1);
+    }
+    if (isNaN(topNum) || topNum < 0) {
+      console.error(chalk.red(`  Invalid top: "${top}". Must be a non-negative integer.`));
+      process.exit(1);
+    }
+
     const config: Record<string, unknown> = {
       defaultModel: model,
-      depth: parseInt(depth, 10),
-      top: parseInt(top, 10),
+      depth: depthNum,
+      top: topNum,
     };
 
     if (ignorePatterns) {
       config.ignore = ignorePatterns.split(",").map((s) => s.trim()).filter(Boolean);
     }
 
-    writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
+    try {
+      writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(chalk.red(`  Failed to create ${configPath}: ${msg}`));
+      process.exit(1);
+    }
     console.log("");
     console.log(chalk.green(`  ✓ Created ${configPath}`));
     console.log("");

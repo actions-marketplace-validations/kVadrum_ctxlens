@@ -161,8 +161,14 @@ export const scanCommand = new Command("scan")
 
     function emit(text: string): void {
       if (opts.output) {
-        writeFileSync(resolve(opts.output), text, "utf-8");
-        console.log(`Output written to ${opts.output}`);
+        try {
+          writeFileSync(resolve(opts.output), text, "utf-8");
+          console.log(`Output written to ${opts.output}`);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(`Failed to write to ${opts.output}: ${msg}`);
+          process.exit(1);
+        }
       } else {
         console.log(text);
       }

@@ -50,6 +50,11 @@ export const diffCommand = new Command("diff")
     const isStripMode = opts.stripComments || opts.stripWhitespace;
     const isRefMode = !!opts.ref;
 
+    if (isStripMode && isRefMode) {
+      console.error("Cannot combine --ref with --strip-comments / --strip-whitespace.");
+      process.exit(1);
+    }
+
     const files = scanDirectory(rootPath, {
       respectGitignore: true,
       extraIgnore: config.ignore ?? [],
@@ -78,23 +83,39 @@ export const diffCommand = new Command("diff")
         currentMap.set(f.relativePath, countTokens(f.content, model.tokenizer));
       }
 
-      // Get files at the ref
-      const refFiles = getFilesAtRef(rootPath, opts.ref);
+      // Get files at the ref (throws on invalid ref)
+      let refFiles: string[];
+      try {
+        refFiles = getFilesAtRef(rootPath, opts.ref);
+      } catch {
+        console.error(`Invalid git ref: '${opts.ref}'. Check that the branch, tag, or commit exists.`);
+        freeEncoders();
+        process.exit(1);
+      }
+
+      const refFileSet = new Set(refFiles);
       const allPaths = new Set([...currentMap.keys(), ...refFiles]);
+      const unreadable: string[] = [];
 
       deltas = [];
       for (const p of allPaths) {
         const after = currentMap.get(p) ?? 0;
         let before = 0;
-        if (refFiles.includes(p)) {
+        if (refFileSet.has(p)) {
           const content = getFileContentAtRef(rootPath, opts.ref, p);
           if (content !== null) {
             before = countTokens(content, model.tokenizer);
+          } else {
+            unreadable.push(p);
           }
         }
         if (before !== after) {
           deltas.push({ relativePath: p, before, after, delta: after - before });
         }
+      }
+
+      if (unreadable.length > 0) {
+        console.error(chalk.yellow(`  Warning: could not read ${unreadable.length} file(s) at ${opts.ref}`));
       }
     } else {
       modeLabel = "changed files";
@@ -130,7 +151,10 @@ export const diffCommand = new Command("diff")
 
     if (isStripMode || isRefMode) {
       if (meaningful.length === 0) {
-        console.log(chalk.dim("  No token savings from stripping.\n"));
+        const msg = isRefMode
+          ? `No token differences vs ${opts.ref}.`
+          : "No token savings from stripping.";
+        console.log(chalk.dim(`\n  ${msg}\n`));
         freeEncoders();
         return;
       }

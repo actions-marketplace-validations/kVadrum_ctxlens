@@ -114,8 +114,8 @@ function loadIgnoreRules(rootPath: string, respectGitignore: boolean): Ignore {
   try {
     const ctxlensIgnore = readFileSync(join(rootPath, ".ctxlensignore"), "utf-8");
     ig.add(ctxlensIgnore);
-  } catch {
-    // no .ctxlensignore — that's fine
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
   }
 
   // .gitignore
@@ -123,8 +123,8 @@ function loadIgnoreRules(rootPath: string, respectGitignore: boolean): Ignore {
     try {
       const gitignoreContent = readFileSync(join(rootPath, ".gitignore"), "utf-8");
       ig.add(gitignoreContent);
-    } catch {
-      // no .gitignore — that's fine
+    } catch (err: unknown) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
     }
   }
 
@@ -217,11 +217,12 @@ export function scanDirectory(
             content,
             lines: content.split("\n").length,
           });
-          if (opts.onProgress && files.length % 100 === 0) {
-            opts.onProgress(files.length);
-          }
         } catch {
           // skip unreadable files
+          continue;
+        }
+        if (opts.onProgress && files.length % 100 === 0) {
+          opts.onProgress(files.length);
         }
       }
     }
