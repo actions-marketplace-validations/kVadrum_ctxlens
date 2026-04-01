@@ -1,7 +1,7 @@
 name: 'ctxlens Context Check'
 description: 'Verify your codebase fits within AI model context windows'
 branding:
-  icon: 'eye'
+  icon: 'aperture'
   color: 'purple'
 
 inputs:
