@@ -83,7 +83,7 @@ export function computeBudget(
   for (const file of files) {
     const parts = file.relativePath.split("/");
     const dirParts = parts.slice(0, Math.min(parts.length - 1, depth));
-    const dirPath = dirParts.length > 0 ? dirParts.join("/") + "/" : "./";
+    const dirPath = dirParts.length > 0 ? dirParts.join("/") + "/" : "(root files)";
 
     const existing = dirMap.get(dirPath) ?? { tokens: 0, files: 0 };
     existing.tokens += file.tokens;

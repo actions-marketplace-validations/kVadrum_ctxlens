@@ -6,15 +6,23 @@
  * terminal (default), JSON, and quiet output modes.
  */
 
-import { resolve, basename } from "node:path";
+import { resolve, basename, join } from "node:path";
+import { writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { Command } from "commander";
 import { scanDirectory } from "../core/scanner.js";
 import { countTokens, freeEncoders } from "../core/tokenizer.js";
 import { getModel, getAllModels } from "../core/models.js";
 import { computeBudget, checkMultiModelBudget } from "../core/budget.js";
 import type { FileTokenInfo } from "../core/budget.js";
-import { renderTerminal } from "../output/terminal.js";
+import { renderTerminal, renderCompare } from "../output/terminal.js";
+import type { CompareEntry } from "../output/terminal.js";
 import { renderJson } from "../output/json.js";
+import { renderHtml } from "../output/html.js";
+import { loadConfig } from "../utils/config.js";
+
+/** The available tokenizer encodings to compare. */
+const COMPARE_ENCODINGS = ["cl100k_base", "o200k_base"];
 
 export const scanCommand = new Command("scan")
   .description("Scan a directory and report token counts")
@@ -29,21 +37,35 @@ export const scanCommand = new Command("scan")
   .option("--include <patterns...>", "only include matching files")
   .option("--exclude <patterns...>", "exclude matching files")
   .option("-q, --quiet", "minimal output: just total tokens and budget status")
+  .option("--compare", "compare token counts across different tokenizers")
+  .option("--report", "generate an HTML report and open in browser")
   .action(async (path: string, opts) => {
     const rootPath = resolve(path);
-    const model = getModel(opts.model);
+    const config = loadConfig(rootPath);
+
+    // Resolve model: CLI flag > env var > config > default
+    const modelId =
+      opts.model !== "claude-sonnet-4-6"
+        ? opts.model
+        : process.env.CTXLENS_MODEL ?? config.defaultModel ?? "claude-sonnet-4-6";
+    const model = getModel(modelId);
 
     if (!model) {
-      console.error(`Unknown model: ${opts.model}. Run 'ctxlens models' to see available models.`);
+      console.error(`Unknown model: ${modelId}. Run 'ctxlens models' to see available models.`);
       process.exit(1);
     }
+
+    // Merge config with CLI options (CLI wins)
+    const extraIgnore = [...(config.ignore ?? []), ...(opts.ignore ?? [])];
+    const include = opts.include ?? config.include ?? [];
+    const exclude = opts.exclude ?? [];
 
     // Discover files
     const files = scanDirectory(rootPath, {
       respectGitignore: opts.gitignore !== false,
-      extraIgnore: opts.ignore ?? [],
-      include: opts.include ?? [],
-      exclude: opts.exclude ?? [],
+      extraIgnore,
+      include,
+      exclude,
     });
 
     // Tokenize each file
@@ -53,11 +75,60 @@ export const scanCommand = new Command("scan")
       lines: f.lines,
     }));
 
-    const depth = parseInt(opts.depth, 10);
-    const topN = parseInt(opts.top, 10);
+    const depth = parseInt(opts.depth !== "3" ? opts.depth : String(config.depth ?? 3), 10);
+    const topN = parseInt(opts.top !== "10" ? opts.top : String(config.top ?? 10), 10);
     const result = computeBudget(fileTokens, model, depth);
 
     // Render output in the requested format
+    if (opts.compare) {
+      const entries: CompareEntry[] = files.map((f) => {
+        const tokenCounts: Record<string, number> = {};
+        for (const enc of COMPARE_ENCODINGS) {
+          tokenCounts[enc] = countTokens(f.content, enc);
+        }
+        return { relativePath: f.relativePath, tokenCounts };
+      });
+      console.log(renderCompare(entries, COMPARE_ENCODINGS, topN));
+      freeEncoders();
+      return;
+    }
+
+    if (opts.report) {
+      const allModels = getAllModels();
+      const multiModel = checkMultiModelBudget(result.totalTokens, allModels);
+      const html = renderHtml(result, basename(rootPath), multiModel);
+      const reportPath = join(rootPath, "ctxlens-report.html");
+      writeFileSync(reportPath, html, "utf-8");
+      console.log(`Report saved to ${reportPath}`);
+
+      // Try to open in browser
+      try {
+        const platform = process.platform;
+        if (platform === "darwin") {
+          execFileSync("open", [reportPath]);
+        } else if (platform === "win32") {
+          execFileSync("cmd", ["/c", "start", reportPath]);
+        } else {
+          // Linux / WSL
+          try {
+            execFileSync("xdg-open", [reportPath], { stdio: "ignore" });
+          } catch {
+            // WSL fallback
+            try {
+              execFileSync("wslview", [reportPath], { stdio: "ignore" });
+            } catch {
+              console.log("Open the file in your browser to view the report.");
+            }
+          }
+        }
+      } catch {
+        console.log("Open the file in your browser to view the report.");
+      }
+
+      freeEncoders();
+      return;
+    }
+
     if (opts.json) {
       console.log(renderJson(result, basename(rootPath)));
     } else if (opts.quiet) {

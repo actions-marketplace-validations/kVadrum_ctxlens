@@ -9,13 +9,15 @@
 import { Command } from "commander";
 import { scanCommand } from "./scan.js";
 import { modelsCommand } from "./models.js";
+import { budgetCommand } from "./budget.js";
 
 const program = new Command()
   .name("ctxlens")
   .description("Token budget analyzer for AI context windows")
-  .version("0.1.0");
+  .version("0.2.0");
 
 program.addCommand(scanCommand);
+program.addCommand(budgetCommand);
 program.addCommand(modelsCommand);
 
 program.parse();

@@ -16,6 +16,7 @@ const DEFAULT_IGNORE = [
   // Dependencies & environments
   "node_modules",
   ".git",
+  ".claude",
   ".venv",
   "venv",
   "__pycache__",
